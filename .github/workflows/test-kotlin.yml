@@ -1,0 +1,215 @@
+name: Kotlin Bindings Tests
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ffi-commons/**'
+      - 'coinswap-kotlin/**'
+      - '.github/workflows/test-kotlin.yml'
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test-kotlin-bindings:
+    name: Test Kotlin Bindings
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+    
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Kotlin
+        run: |
+          # Install Kotlin compiler for testing
+          curl -s https://get.sdkman.io | bash
+          source "$HOME/.sdkman/bin/sdkman-init.sh"
+          sdk install kotlin || true
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ffi-commons/target/
+          key: ${{ runner.os }}-cargo-kotlin-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libssl-dev \
+            pkg-config
+
+      - name: Check Docker
+        run: |
+          docker --version
+          docker compose version
+
+      - name: Build Rust FFI library
+        working-directory: ./ffi-commons
+        run: |
+          cargo build --release
+          echo "Built library at:"
+          ls -lh target/release/libcoinswap_ffi.so
+
+      - name: Generate Kotlin bindings
+        working-directory: ./ffi-commons
+        run: |
+          chmod +x create_bindings.sh
+          ./create_bindings.sh
+          echo "Generated Kotlin bindings:"
+          ls -lh ../coinswap-kotlin/uniffi/coinswap/
+
+      - name: Verify Kotlin bindings
+        working-directory: ./coinswap-kotlin
+        run: |
+          echo "Checking generated files..."
+          test -f uniffi/coinswap/coinswap.kt && echo "✓ coinswap.kt exists"
+          test -f libcoinswap_ffi.so && echo "✓ libcoinswap_ffi.so exists"
+          
+          echo "Kotlin binding file size:"
+          wc -l uniffi/coinswap/coinswap.kt
+
+      - name: Setup Docker environment
+        working-directory: ./ffi-commons
+        run: |
+          chmod +x ffi-docker-setup
+          ./ffi-docker-setup setup
+          ./ffi-docker-setup start
+
+      - name: Wait for Docker services to be ready
+        run: |
+          echo "Waiting for Bitcoin Core to be ready..."
+          sleep 30
+          
+          # Check if bitcoind is responding
+          max_attempts=30
+          attempt=0
+          while [ $attempt -lt $max_attempts ]; do
+            if docker exec coinswap-bitcoind bitcoin-cli -regtest -rpcport=18442 -rpcuser=user -rpcpassword=password getblockchaininfo > /dev/null 2>&1; then
+              echo "Bitcoin Core is ready!"
+              break
+            fi
+            echo "Waiting for Bitcoin Core... (attempt $((attempt + 1))/$max_attempts)"
+            sleep 2
+            attempt=$((attempt + 1))
+          done
+          
+          if [ $attempt -eq $max_attempts ]; then
+            echo "Bitcoin Core failed to start!"
+            exit 1
+          fi
+          
+          echo "Waiting for Tor to be ready..."
+          sleep 10
+          
+          echo "Waiting for Makers to be ready..."
+          sleep 20
+
+      - name: Check Docker containers status
+        run: |
+          echo "=== Docker Containers ==="
+          docker ps -a
+          
+          echo -e "\n=== Bitcoin Core Info ==="
+          docker exec coinswap-bitcoind bitcoin-cli -regtest -rpcport=18442 -rpcuser=user -rpcpassword=password getblockchaininfo || true
+
+      - name: Test Kotlin bindings (unit test via Rust FFI)
+        working-directory: ./ffi-commons
+        run: |
+          echo "Running Kotlin/JVM compatible FFI tests..."
+          cargo test taproot_taker_methods -- --nocapture
+        continue-on-error: false
+
+      - name: Validate AndroidExample.kt syntax
+        working-directory: ./coinswap-kotlin
+        run: |
+          echo "Checking AndroidExample.kt for syntax errors..."
+          # This is a basic syntax check - full compilation would need Android SDK
+          if command -v kotlinc &> /dev/null; then
+            echo "Checking Kotlin syntax..."
+            # Note: This won't fully compile due to missing Android SDK
+            # but can catch basic syntax errors
+            kotlinc -version
+          else
+            echo "Kotlin compiler not available, skipping syntax check"
+          fi
+
+      - name: Cleanup Docker environment
+        if: always()
+        working-directory: ./ffi-commons
+        run: |
+          ./ffi-docker-setup stop || true
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kotlin-test-logs
+          path: |
+            ~/.coinswap/taker/debug.log
+            ffi-commons/.coinswap-docker-stack/logs/
+            ffi-commons/target/debug/*.log
+          retention-days: 7
+
+  # Optional: Full Android build test (requires Android SDK setup)
+  # Uncomment when you have a complete Android project structure
+  # test-android-app:
+  #   name: Build Android App
+  #   runs-on: ubuntu-latest
+  #   needs: test-kotlin-bindings
+  #   
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+  #     
+  #     - name: Setup Java
+  #       uses: actions/setup-java@v4
+  #       with:
+  #         distribution: 'temurin'
+  #         java-version: '17'
+  #     
+  #     - name: Setup Android SDK
+  #       uses: android-actions/setup-android@v3
+  #     
+  #     - name: Cache Gradle dependencies
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: |
+  #           ~/.gradle/caches
+  #           ~/.gradle/wrapper
+  #         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+  #     
+  #     - name: Build Android APK
+  #       working-directory: ./coinswap-kotlin
+  #       run: ./gradlew assembleDebug

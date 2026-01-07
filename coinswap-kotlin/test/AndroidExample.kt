@@ -25,10 +25,10 @@ class WalletActivity : AppCompatActivity() {
             try {
                 taker = Taker.init(
                     dataDir = filesDir.absolutePath,
-                    walletFileName = "wallet",
+                    walletFileName = "kotlin_legacy_wallet",
                     rpcConfig = getRpcConfig(),
                     controlPort = 9051u,
-                    torAuthPassword = null,
+                    torAuthPassword = "coinswap",
                     zmqAddr = "tcp://localhost:28332",
                     password = getUserPassword()
                 )
@@ -76,9 +76,9 @@ class WalletActivity : AppCompatActivity() {
     private fun getRpcConfig(): RPCConfig {
         return RPCConfig(
             url = "http://localhost:18442",
-            user = "bitcoin",
-            password = "bitcoin",
-            walletName = "taker_wallet"
+            user = "user",
+            password = "password",
+            walletName = "kotlin_legacy_wallet"
         )
     }
     
