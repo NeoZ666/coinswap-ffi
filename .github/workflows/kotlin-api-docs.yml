@@ -26,8 +26,9 @@ jobs:
           ./gradlew dokkaHtml
 
       - name: "Upload documentation website"
+        working-directory: coinswap-kotlin
         uses: actions/upload-artifact@v4
         with:
           name: artifact-android-api-docs
-          path: /home/runner/work/coinswap-ffi/coinswap-kotlin/lib/build/dokka/html/
+          path: ./lib/build/dokka/html/
   
