@@ -340,7 +340,7 @@ fund_makers() {
     sleep 15
 
     print_info "Funding makerd1..."
-    local maker1_addr=$(docker logs coinswap-makerd1 2>&1 | grep "Send at least" | tail -1 | grep -oP 'bcrt1[a-zA-Z0-9]+')
+    local maker1_addr=$(docker logs coinswap-makerd1 2>&1 | grep "Send at least" | tail -1 | grep -Eo 'bcrt1[[:alnum:]]+')
     if [ -n "$maker1_addr" ]; then
         print_info "Makerd1 address: $maker1_addr"
         docker exec coinswap-bitcoind bitcoin-cli -regtest -rpcport=$BITCOIN_RPC_PORT -rpcuser=user -rpcpassword=password -rpcwallet=test sendtoaddress "$maker1_addr" 1.0
@@ -350,7 +350,7 @@ fund_makers() {
     fi
 
     print_info "Funding makerd2..."
-    local maker2_addr=$(docker logs coinswap-makerd2 2>&1 | grep "Send at least" | tail -1 | grep -oP 'bcrt1[a-zA-Z0-9]+')
+    local maker2_addr=$(docker logs coinswap-makerd2 2>&1 | grep "Send at least" | tail -1 | grep -Eo 'bcrt1[[:alnum:]]+')
     if [ -n "$maker2_addr" ]; then
         print_info "Makerd2 address: $maker2_addr"
         docker exec coinswap-bitcoind bitcoin-cli -regtest -rpcport=$BITCOIN_RPC_PORT -rpcuser=user -rpcpassword=password -rpcwallet=test sendtoaddress "$maker2_addr" 1.0
@@ -362,7 +362,7 @@ fund_makers() {
     # Only fund maker3 and maker4 if running in --run-all mode
     if [[ "$RUN_ALL" == "true" ]]; then
         print_info "Funding makerd3..."
-        local maker3_addr=$(docker logs coinswap-makerd3 2>&1 | grep "Send at least" | tail -1 | grep -oP 'bcrt1[a-zA-Z0-9]+')
+        local maker3_addr=$(docker logs coinswap-makerd3 2>&1 | grep "Send at least" | tail -1 | grep -Eo 'bcrt1[[:alnum:]]+')
         if [ -n "$maker3_addr" ]; then
             print_info "Makerd3 address: $maker3_addr"
             docker exec coinswap-bitcoind bitcoin-cli -regtest -rpcport=$BITCOIN_RPC_PORT -rpcuser=user -rpcpassword=password -rpcwallet=test sendtoaddress "$maker3_addr" 1.0
@@ -372,7 +372,7 @@ fund_makers() {
         fi
 
         print_info "Funding makerd4..."
-        local maker4_addr=$(docker logs coinswap-makerd4 2>&1 | grep "Send at least" | tail -1 | grep -oP 'bcrt1[a-zA-Z0-9]+')
+        local maker4_addr=$(docker logs coinswap-makerd4 2>&1 | grep "Send at least" | tail -1 | grep -Eo 'bcrt1[[:alnum:]]+')
         if [ -n "$maker4_addr" ]; then
             print_info "Makerd4 address: $maker4_addr"
             docker exec coinswap-bitcoind bitcoin-cli -regtest -rpcport=$BITCOIN_RPC_PORT -rpcuser=user -rpcpassword=password -rpcwallet=test sendtoaddress "$maker4_addr" 1.0
