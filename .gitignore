@@ -9,6 +9,11 @@ dist/
 build/
 .Python
 
+#Swift
+coinswap-swift/*.h
+coinswap-swift/*.modulemap
+coinswap-swift/coinswap.swift
+
 # Docker generated files
 ffi-commons/docker-compose.generated.yml
 ffi-commons/torrc.generated
