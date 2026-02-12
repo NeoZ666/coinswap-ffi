@@ -252,8 +252,27 @@ build_bitcoin_image() {
         local s_amd64=$(grep "^SHA256_AMD64=" "docker/bitcoin-mutinynet.version" | cut -d'=' -f2)
         local f_arm64=$(grep "^FILENAME_ARM64=" "docker/bitcoin-mutinynet.version" | cut -d'=' -f2)
         local s_arm64=$(grep "^SHA256_ARM64=" "docker/bitcoin-mutinynet.version" | cut -d'=' -f2)
+        local target_arch="${TARGETARCH:-}"
+
+        if [ -z "$target_arch" ]; then
+            case "$(uname -m)" in
+                x86_64|amd64)
+                    target_arch="amd64"
+                    ;;
+                arm64|aarch64)
+                    target_arch="arm64"
+                    ;;
+                *)
+                    print_error "Unsupported host architecture: $(uname -m)"
+                    exit 1
+                    ;;
+            esac
+        fi
+
+        print_info "Using TARGETARCH=$target_arch for Bitcoin image build"
 
         if docker build \
+            --build-arg TARGETARCH="$target_arch" \
             --build-arg TAG="$tag" \
             --build-arg FILENAME_AMD64="$f_amd64" \
             --build-arg SHA256_AMD64="$s_amd64" \

@@ -33,17 +33,16 @@ jobs:
         with:
           persist-credentials: false
 
-
-
       - name: "Set up Rust"
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
+      - name: "Build Swift package"
+        run: bash ./build-xcframework-dev.sh
+
       - name: Setup Docker on macOS
         id: setup-docker
-        uses: douglascamata/setup-docker-macos-action@v1.0.1
+        uses: douglascamata/setup-docker-macos-action@v1.1.0
         with:
-          lima: v1.2.1
-          colima: v0.9.1
           colima-network-address: false
 
       - name: Check Docker
@@ -80,9 +79,6 @@ jobs:
 
           echo -e "\n=== Maker4 Logs ==="
           docker logs coinswap-makerd4 --tail 30 || true
-
-      - name: "Build Swift package"
-        run: bash ./build-xcframework-dev.sh
 
       - name: "Run Swift tests"
         run: swift test --filter Live
