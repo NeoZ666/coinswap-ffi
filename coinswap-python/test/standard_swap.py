@@ -189,34 +189,27 @@ def main():
         print(f"Swap Parameters:")
         print(f"  Send Amount: {swap_params.send_amount} sats")
         print(f"  Maker Count: {swap_params.maker_count}")
-        
-        try:
-            print("\n🔄 Executing coinswap (this may take a while)...")
-            result = taker.do_coinswap(swap_params=swap_params)
-            
-            if result:
-                print(f"\n✅ Coinswap completed successfully!")
-                print(f"\nSwap Report:")
-                outgoing_amount = getattr(result, "outgoing_amount", getattr(result, "target_amount", None))
-                fee_value = getattr(result, "fee_paid_or_earned", getattr(result, "total_fee", None))
-                total_fee_paid = abs(fee_value) if fee_value is not None else None
-                print(f"  Swap ID: {result.swap_id}")
-                print(f"  Duration: {result.swap_duration_seconds:.2f} seconds")
-                print(f"  Outgoing/Target Amount: {outgoing_amount} sats")
-                print(f"  Total Fee Paid: {total_fee_paid} sats")
-                print(f"  Maker Fees: {result.total_maker_fees} sats")
-                print(f"  Mining Fee: {result.mining_fee} sats")
-                print(f"  Fee Percentage: {result.fee_percentage:.4f}%")
-                print(f"  Number of Makers Used: {result.makers_count}")
-                print(f"  Maker Addresses:")
-                for i, addr in enumerate(result.maker_addresses, 1):
-                    print(f"    {i}. {addr}")
-            else:
-                print("\n⚠️  Coinswap returned no result (possibly no makers available)")
-                
-        except Exception as e:
-            print(f"\n❌ Coinswap failed: {e}")
-            print("   This is expected if makers are not running or not properly set up.")
+
+        print("\n🔄 Executing coinswap (this may take a while)...")
+        result = taker.do_coinswap(swap_params=swap_params)
+        assert result is not None, "Coinswap should return a swap report"
+
+        print(f"\n✅ Coinswap completed successfully!")
+        print(f"\nSwap Report:")
+        outgoing_amount = getattr(result, "outgoing_amount", getattr(result, "target_amount", None))
+        fee_value = getattr(result, "fee_paid_or_earned", getattr(result, "total_fee", None))
+        total_fee_paid = abs(fee_value) if fee_value is not None else None
+        print(f"  Swap ID: {result.swap_id}")
+        print(f"  Duration: {result.swap_duration_seconds:.2f} seconds")
+        print(f"  Outgoing/Target Amount: {outgoing_amount} sats")
+        print(f"  Total Fee Paid: {total_fee_paid} sats")
+        print(f"  Maker Fees: {result.total_maker_fees} sats")
+        print(f"  Mining Fee: {result.mining_fee} sats")
+        print(f"  Fee Percentage: {result.fee_percentage:.4f}%")
+        print(f"  Number of Makers Used: {result.makers_count}")
+        print(f"  Maker Addresses:")
+        for i, addr in enumerate(result.maker_addresses, 1):
+            print(f"    {i}. {addr}")
 
         # Final balance check
         print("\n📊 Final balances after coinswap...")
