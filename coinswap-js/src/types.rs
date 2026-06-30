@@ -16,7 +16,9 @@ use coinswap::{
   },
   wallet::{
     ffi::{MakerFeeInfo as csMakerFeeInfo, TakerReport as csTakerReport},
-    Balances as CoinswapBalances, FidelityBond as csFidelityBond, RPCConfig as CoinswapRPCConfig,
+    BackendConfig as CoinswapBackendConfig, Balances as CoinswapBalances,
+    ElectrumConfig as CoinswapElectrumConfig, FidelityBond as csFidelityBond,
+    RPCConfig as CoinswapRPCConfig,
   },
 };
 use napi_derive::napi;
@@ -138,6 +140,7 @@ pub struct RPCConfig {
   pub username: String,
   pub password: String,
   pub wallet_name: String,
+  pub zmq_addr: Option<String>,
 }
 
 impl From<RPCConfig> for CoinswapRPCConfig {
@@ -146,6 +149,73 @@ impl From<RPCConfig> for CoinswapRPCConfig {
       url: config.url,
       auth: Auth::UserPass(config.username, config.password),
       wallet_name: config.wallet_name,
+      zmq_addr: config
+        .zmq_addr
+        .unwrap_or_else(|| CoinswapRPCConfig::default().zmq_addr),
+    }
+  }
+}
+
+#[napi(object)]
+pub struct ElectrumConfig {
+  pub url: String,
+  pub wallet_name: String,
+}
+
+impl From<ElectrumConfig> for CoinswapElectrumConfig {
+  fn from(config: ElectrumConfig) -> Self {
+    Self {
+      url: config.url,
+      wallet_name: config.wallet_name,
+    }
+  }
+}
+
+#[napi(object)]
+pub struct BackendConfig {
+  pub bitcoind: Option<RPCConfig>,
+  pub electrum: Option<ElectrumConfig>,
+}
+
+impl BackendConfig {
+  pub(crate) fn default_bitcoind() -> Self {
+    Self {
+      bitcoind: Some(RPCConfig {
+        url: "http://127.0.0.1:38332".to_string(),
+        username: "user".to_string(),
+        password: "password".to_string(),
+        wallet_name: "coinswap_wallet".to_string(),
+        zmq_addr: Some("tcp://127.0.0.1:28332".to_string()),
+      }),
+      electrum: None,
+    }
+  }
+
+  pub(crate) fn into_coinswap_with_wallet_name(
+    self,
+    wallet_file_name: Option<String>,
+  ) -> napi::Result<CoinswapBackendConfig> {
+    let mut backend = CoinswapBackendConfig::try_from(self)?;
+    if let Some(wallet_file_name) = wallet_file_name {
+      backend.set_wallet_name(wallet_file_name);
+    }
+    Ok(backend)
+  }
+}
+
+impl TryFrom<BackendConfig> for CoinswapBackendConfig {
+  type Error = napi::Error;
+
+  fn try_from(config: BackendConfig) -> Result<Self, Self::Error> {
+    match (config.bitcoind, config.electrum) {
+      (Some(bitcoind), None) => Ok(CoinswapBackendConfig::Bitcoind(bitcoind.into())),
+      (None, Some(electrum)) => Ok(CoinswapBackendConfig::Electrum(electrum.into())),
+      (None, None) => Err(napi::Error::from_reason(
+        "Backend config must include either bitcoind or electrum",
+      )),
+      (Some(_), Some(_)) => Err(napi::Error::from_reason(
+        "Backend config cannot include both bitcoind and electrum",
+      )),
     }
   }
 }

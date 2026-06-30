@@ -20,8 +20,9 @@ use coinswap::{
         },
     },
     wallet::{
-        AddressType as csAddressType, Balances as CoinswapBalances, FidelityBond as csFidelityBond,
-        RPCConfig as CoinswapRPCConfig,
+        AddressType as csAddressType, BackendConfig as CoinswapBackendConfig,
+        Balances as CoinswapBalances, ElectrumConfig as CoinswapElectrumConfig,
+        FidelityBond as csFidelityBond, RPCConfig as CoinswapRPCConfig,
         ffi::{
             MakerFeeInfo as csMakerFeeInfo, TakerReport as csTakerReport,
             restore_wallet_gui_app as cs_restore_wallet_gui_app,
@@ -41,6 +42,8 @@ pub struct RPCConfig {
     pub password: String,
     /// The wallet name in the bitcoin node, derive this from the descriptor.
     pub wallet_name: String,
+    /// ZMQ endpoint for block/tx notifications.
+    pub zmq_addr: Option<String>,
 }
 
 impl From<RPCConfig> for CoinswapRPCConfig {
@@ -49,6 +52,73 @@ impl From<RPCConfig> for CoinswapRPCConfig {
             url: config.url,
             auth: Auth::UserPass(config.username, config.password),
             wallet_name: config.wallet_name,
+            zmq_addr: config
+                .zmq_addr
+                .unwrap_or_else(|| CoinswapRPCConfig::default().zmq_addr),
+        }
+    }
+}
+
+/// Configuration parameters for connecting to an Electrum server.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ElectrumConfig {
+    /// Electrum server endpoint.
+    pub url: String,
+    /// Wallet file name.
+    pub wallet_name: String,
+}
+
+impl From<ElectrumConfig> for CoinswapElectrumConfig {
+    fn from(config: ElectrumConfig) -> Self {
+        Self {
+            url: config.url,
+            wallet_name: config.wallet_name,
+        }
+    }
+}
+
+/// Backend configuration for taker and wallet operations.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct BackendConfig {
+    /// Bitcoin Core backend configuration.
+    pub bitcoind: Option<RPCConfig>,
+    /// Electrum backend configuration.
+    pub electrum: Option<ElectrumConfig>,
+}
+
+impl BackendConfig {
+    pub(crate) fn default_bitcoind() -> Self {
+        Self {
+            bitcoind: Some(create_default_rpc_config()),
+            electrum: None,
+        }
+    }
+
+    pub(crate) fn into_coinswap_with_wallet_name(
+        self,
+        wallet_file_name: Option<String>,
+    ) -> Result<CoinswapBackendConfig, TakerError> {
+        let mut backend = CoinswapBackendConfig::try_from(self)?;
+        if let Some(wallet_file_name) = wallet_file_name {
+            backend.set_wallet_name(wallet_file_name);
+        }
+        Ok(backend)
+    }
+}
+
+impl TryFrom<BackendConfig> for CoinswapBackendConfig {
+    type Error = TakerError;
+
+    fn try_from(config: BackendConfig) -> Result<Self, Self::Error> {
+        match (config.bitcoind, config.electrum) {
+            (Some(bitcoind), None) => Ok(CoinswapBackendConfig::Bitcoind(bitcoind.into())),
+            (None, Some(electrum)) => Ok(CoinswapBackendConfig::Electrum(electrum.into())),
+            (None, None) => Err(TakerError::General {
+                msg: "Backend config must include either bitcoind or electrum".to_string(),
+            }),
+            (Some(_), Some(_)) => Err(TakerError::General {
+                msg: "Backend config cannot include both bitcoind and electrum".to_string(),
+            }),
         }
     }
 }
@@ -743,29 +813,44 @@ pub fn fetch_mempool_fees() -> Result<FeeRates, TakerError> {
 pub fn restore_wallet_gui_app(
     data_dir: Option<String>,
     wallet_file_name: Option<String>,
-    rpc_config: RPCConfig,
+    backend_config: BackendConfig,
     backup_file_path: String,
     password: Option<String>,
-) {
+) -> Result<(), TakerError> {
     let data_dir = data_dir.map(PathBuf::from);
+    let backend = backend_config.into_coinswap_with_wallet_name(wallet_file_name.clone())?;
 
-    cs_restore_wallet_gui_app(
-        data_dir,
-        wallet_file_name,
-        rpc_config.into(),
-        backup_file_path.into(),
-        password,
-    );
+    if matches!(&backend, CoinswapBackendConfig::Electrum(_)) {
+        cs_restore_wallet_gui_app::<coinswap::wallet::ElectrumBackend>(
+            data_dir,
+            wallet_file_name,
+            backend,
+            backup_file_path.into(),
+            password,
+        );
+    } else {
+        cs_restore_wallet_gui_app::<coinswap::wallet::BitcoindBackend>(
+            data_dir,
+            wallet_file_name,
+            backend,
+            backup_file_path.into(),
+            password,
+        );
+    }
+
+    Ok(())
 }
 
 /// Checks whether wallet is encrypted or not.
 #[uniffi::export]
 pub fn is_wallet_encrypted(wallet_path: String) -> Result<bool, TakerError> {
     let path = PathBuf::from(wallet_path);
+    if !path.exists() {
+        return Ok(false);
+    }
 
-    coinswap::wallet::Wallet::is_wallet_encrypted(&path).map_err(|e| TakerError::Wallet {
-        msg: format!("Failed to check wallet encryption: {:?}", e),
-    })
+    let content = std::fs::read(&path).map_err(|e| TakerError::IO { msg: e.to_string() })?;
+    Ok(serde_cbor::from_slice::<coinswap::security::EncryptedData>(&content).is_ok())
 }
 
 #[uniffi::export]
@@ -775,6 +860,23 @@ pub fn create_default_rpc_config() -> RPCConfig {
         username: "user".to_string(),
         password: "password".to_string(),
         wallet_name: "coinswap_wallet".to_string(),
+        zmq_addr: Some("tcp://127.0.0.1:28332".to_string()),
+    }
+}
+
+#[uniffi::export]
+pub fn create_default_bitcoind_backend_config() -> BackendConfig {
+    BackendConfig::default_bitcoind()
+}
+
+#[uniffi::export]
+pub fn create_default_electrum_backend_config() -> BackendConfig {
+    BackendConfig {
+        bitcoind: None,
+        electrum: Some(ElectrumConfig {
+            url: "electrum1.bluewallet.io:50001".to_string(),
+            wallet_name: "coinswap_wallet".to_string(),
+        }),
     }
 }
 

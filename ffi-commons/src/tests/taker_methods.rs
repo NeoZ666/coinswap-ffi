@@ -8,6 +8,7 @@
 use crate::{
     taker::{SwapParams, Taker},
     tests::docker_helpers::{self, DockerBitcoind},
+    types::BackendConfig,
 };
 use bitcoin::Amount;
 use bitcoind::bitcoincore_rpc::RpcApi;
@@ -28,11 +29,13 @@ fn setup_bitcoind_and_taker(wallet_name: &str) -> (Arc<Taker>, DockerBitcoind) {
     let taker = Taker::init(
         None,
         Some(wallet_name.to_string()),
-        Some(rpc_config),
+        Some(BackendConfig {
+            bitcoind: Some(rpc_config),
+            electrum: None,
+        }),
         // None,
         Some(9051),
         Some("coinswap".to_string()),
-        docker_helpers::DOCKER_BITCOIN_ZMQ.to_string(),
         None,
     )
     .unwrap();
