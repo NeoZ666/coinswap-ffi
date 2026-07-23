@@ -392,7 +392,7 @@ impl Taker {
       .map_err(|e| napi::Error::from_reason(format!("Failed to acquire taker lock: {}", e)))?;
     let wallet = taker
       .get_wallet()
-      .read()
+      .write()
       .map_err(|e| napi::Error::from_reason(format!("Failed to acquire wallet lock: {}", e)))?;
     let internal_addresses = wallet
       .get_next_internal_addresses(count, cs_address_type)
