@@ -133,12 +133,12 @@ def main():
         # Test address generation (external and internal)
         print("\nTesting address generation...")
         external_address1 = taker.get_next_external_address(AddressType(addr_type="P2TR"))
-        print(f"External address 1: {external_address1.address}")
+        print(f"External address 1: {external_address1.addr}")
         
         external_address2 = taker.get_next_external_address(AddressType(addr_type="P2TR"))
-        print(f"External address 2: {external_address2.address}")
+        print(f"External address 2: {external_address2.addr}")
         
-        assert external_address1.address != external_address2.address, "External addresses should be unique"
+        assert external_address1.addr != external_address2.addr, "External addresses should be unique"
         print("✓ External addresses are unique")
 
         internal_addresses = taker.get_next_internal_addresses(3, AddressType(addr_type="P2TR"))
@@ -166,7 +166,7 @@ def main():
 
         # Fund the wallet
         print("\nFunding wallet...")
-        funding_address = external_address1.address
+        funding_address = external_address1.addr
         setup_funding_wallet(funding_address)
         taker.sync_and_save()
         print("✓ wallet funding completed")

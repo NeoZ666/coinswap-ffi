@@ -6,8 +6,9 @@ use crate::{
     AddressType,
     types::{
         Address, Amount, Balances, GetTransactionResultDetail, ListTransactionResult,
-        ListUnspentResultEntry, Offer, OfferBook, OutPoint, RPCConfig, ScriptBuf, SignedAmountSats,
-        SwapReport, TakerError, TotalUtxoInfo, Txid, UtxoSpendInfo, WalletTxInfo,
+        ListUnspentResultEntry, MakerOfferCandidate, Offer, OfferBook, OutPoint, RPCConfig,
+        ScriptBuf, SignedAmountSats, SwapReport, TakerError, TotalUtxoInfo, Txid, UtxoSpendInfo,
+        WalletTxInfo,
     },
 };
 use coinswap::{
@@ -556,6 +557,7 @@ impl Taker {
         Ok(())
     }
 
+    /// Runs a full offerbook sync cycle and blocks until it completes.
     pub fn sync_offerbook_and_wait(&self) -> Result<(), TakerError> {
         let taker = self.taker.lock().map_err(|e| TakerError::General {
             msg: format!(
@@ -569,6 +571,27 @@ impl Taker {
                 msg: format!("Offerbook sync error: {:?}", e),
             })?;
         Ok(())
+    }
+
+    /// Polls a single maker, verifies its fidelity proof, stores it in the offerbook, and returns the maker's final state.
+    pub fn poll_maker(&self, address: String) -> Result<MakerOfferCandidate, TakerError> {
+        let taker = self.taker.lock().map_err(|_| TakerError::General {
+            msg: "Failed to acquire taker lock".to_string(),
+        })?;
+        let candidate = taker.poll_maker(address).map_err(|e| TakerError::Network {
+            msg: format!("Poll maker error: {:?}", e),
+        })?;
+        Ok(MakerOfferCandidate::from(candidate))
+    }
+
+    /// Removes a maker from the offerbook by address; returns true if an entry was removed.
+    pub fn remove_maker(&self, address: String) -> Result<bool, TakerError> {
+        let taker = self.taker.lock().map_err(|_| TakerError::General {
+            msg: "Failed to acquire taker lock".to_string(),
+        })?;
+        taker.remove_maker(address).map_err(|e| TakerError::General {
+            msg: format!("Remove maker error: {:?}", e),
+        })
     }
 
     /// Returns the OfferBook.
@@ -638,6 +661,7 @@ impl Taker {
         Ok(addresses)
     }
 
+    /// Verifies the deniability proof for a completed swap.
     pub fn verify_deniability(&self, swap_id: String) -> Result<bool, TakerError> {
         let taker = self.taker.lock().map_err(|_| TakerError::General {
             msg: "Failed to acquire taker lock".to_string(),

@@ -163,8 +163,8 @@ def main():
 
         print("\nGetting next external address...")
         address = taker.get_next_external_address(AddressType(addr_type="P2WPKH"))
-        setup_funding_wallet(address.address)
-        print(f"Address: {address.address}")
+        setup_funding_wallet(address.addr)
+        print(f"Address: {address.addr}")
 
         print("\nSyncing wallet after funding...")
         taker.sync_and_save()

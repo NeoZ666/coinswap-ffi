@@ -1,0 +1,105 @@
+name: C# Tests
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'coinswap-csharp/**'
+      - 'ffi-commons/**'
+      - '.github/workflows/test-csharp.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'coinswap-csharp/**'
+      - 'ffi-commons/**'
+      - '.github/workflows/test-csharp.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+  # Keep in lockstep with ffi-commons' uniffi crate version.
+  UNIFFI_BINDGEN_CS_TAG: v0.11.0+v0.31.0
+
+jobs:
+  test-csharp:
+    name: Test C# Bindings (${{ matrix.rid }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            rust_target: x86_64-unknown-linux-gnu
+            rid: linux-x64
+            build_script: build-linux.sh
+          - os: macos-14
+            rust_target: aarch64-apple-darwin
+            rid: osx-arm64
+            build_script: build-macos.sh
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.rust_target }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ffi-commons/target/
+          key: ${{ runner.os }}-cargo-csharp-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libssl-dev pkg-config
+
+      - name: Install uniffi-bindgen-cs
+        run: |
+          if ! command -v uniffi-bindgen-cs >/dev/null 2>&1; then
+            cargo install uniffi-bindgen-cs \
+              --git https://github.com/NordSecurity/uniffi-bindgen-cs \
+              --tag "$UNIFFI_BINDGEN_CS_TAG"
+          fi
+
+      - name: Build native library
+        working-directory: coinswap-csharp
+        run: bash ./build-scripts/${{ matrix.build_script }} ${{ matrix.rust_target }}
+
+      - name: Generate C# bindings
+        working-directory: ffi-commons
+        run: |
+          LIB="$(ls target/${{ matrix.rust_target }}/release-smaller/libcoinswap_ffi.* 2>/dev/null | head -n1)"
+          uniffi-bindgen-cs --library "$LIB" --config uniffi.toml \
+            --out-dir ../coinswap-csharp/Coinswap/Generated --no-format
+
+      - name: Test
+        working-directory: coinswap-csharp
+        run: dotnet test Coinswap.Tests/Coinswap.Tests.csproj -c Release

@@ -39,9 +39,9 @@ describeLive('React Native live standard swap (taproot)', () => {
       await taker.syncAndSave()
 
       const address = await taker.getNextExternalAddress(AddressType.P2TR)
-      expect(address.address).toBeTruthy()
+      expect(address.addr).toBeTruthy()
 
-      fundAddress(address.address, '0.42749329')
+      fundAddress(address.addr, '0.42749329')
       await sleep(1_000)
       await taker.syncAndSave()
 

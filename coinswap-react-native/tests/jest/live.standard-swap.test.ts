@@ -39,9 +39,9 @@ describeLive('React Native live standard swap (legacy)', () => {
       await taker.syncAndSave()
 
       const address = await taker.getNextExternalAddress(AddressType.P2WPKH)
-      expect(address.address).toBeTruthy()
+      expect(address.addr).toBeTruthy()
 
-      fundAddress(address.address, '1.0')
+      fundAddress(address.addr, '1.0')
       await sleep(1_000)
       await taker.syncAndSave()
 

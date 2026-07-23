@@ -148,8 +148,8 @@ fn test_taproot_taker_complete_flow() {
     );
 
     assert_ne!(
-        external_address1.as_ref().unwrap().address,
-        external_address2.as_ref().unwrap().address,
+        external_address1.as_ref().unwrap().addr,
+        external_address2.as_ref().unwrap().addr,
         "External addresses should be unique"
     );
 
@@ -196,7 +196,7 @@ fn test_taproot_taker_complete_flow() {
     println!("✓ 'get_balances' test passed (initial zero balances)");
 
     println!("\nFunding wallet...");
-    let funding_address_str = external_address1.unwrap().address;
+    let funding_address_str = external_address1.unwrap().addr;
     let funding_address = funding_address_str
         .parse::<bitcoin::Address<bitcoin::address::NetworkUnchecked>>()
         .unwrap()

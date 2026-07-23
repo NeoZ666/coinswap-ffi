@@ -31,7 +31,7 @@ final class LiveTaprootSwapTests: XCTestCase {
         XCTAssertEqual(balances.spendable, 0)
 
         let address = try taker.getNextExternalAddress(addressType: AddressType(addrType: "P2TR"))
-        try fundAddress(address.address, config: config)
+        try fundAddress(address.addr, config: config)
         try taker.syncAndSave()
         let updatedBalances = try taker.getBalances()
         XCTAssertGreaterThanOrEqual(updatedBalances.spendable, 0)
