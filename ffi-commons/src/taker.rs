@@ -589,9 +589,11 @@ impl Taker {
         let taker = self.taker.lock().map_err(|_| TakerError::General {
             msg: "Failed to acquire taker lock".to_string(),
         })?;
-        taker.remove_maker(address).map_err(|e| TakerError::General {
-            msg: format!("Remove maker error: {:?}", e),
-        })
+        taker
+            .remove_maker(address)
+            .map_err(|e| TakerError::General {
+                msg: format!("Remove maker error: {:?}", e),
+            })
     }
 
     /// Returns the OfferBook.
