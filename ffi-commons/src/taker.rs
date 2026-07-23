@@ -265,12 +265,13 @@ impl Taker {
         let taker = self.taker.lock().map_err(|_| TakerError::General {
             msg: "Failed to acquire taker lock".to_string(),
         })?;
-        let wallet = taker
+        let mut wallet = taker
             .get_wallet()
             .write()
             .map_err(|_| TakerError::General {
                 msg: "Failed to acquire wallet write lock".to_string(),
             })?;
+        let wallet = &mut *wallet;
         let internal_addresses = wallet
             .get_next_internal_addresses(count, cs_address_type)
             .map_err(|e| TakerError::Wallet {
