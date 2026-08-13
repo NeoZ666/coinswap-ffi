@@ -571,7 +571,7 @@ impl Taker {
             .map_err(|_| TakerError::General {
                 msg: "Failed to acquire wallet write lock".to_string(),
             })?
-            .sync_and_save()
+            .sync_and_save(&coinswap::utill::NO_SHUTDOWN)
             .map_err(|e| TakerError::Wallet {
                 msg: format!("Sync wallet error: {:?}", e),
             })?;

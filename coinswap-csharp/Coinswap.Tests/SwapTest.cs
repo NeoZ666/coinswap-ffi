@@ -23,6 +23,7 @@ public class SwapTest
     private const string ZmqAddr = "tcp://localhost:28332";
     private const string ElectrumUrl = "tcp://localhost:50001";
     private const ushort ControlPort = 9051;
+    private static readonly string[] NostrRelays = ["wss://nos.lol", "wss://relay.damus.io"];
 
     /// <summary>Amount swapped by each taker, in sats. The taker is funded with 2×.</summary>
     private const ulong SwapAmount = 500_000;
@@ -56,13 +57,14 @@ public class SwapTest
 
         var dataDir = Path.Combine(Path.GetTempPath(), $"coinswap-csharp-{name}-{Guid.NewGuid():N}");
         Directory.CreateDirectory(dataDir);
+        var rpcWalletName = $"csharp_{name}";
 
         var rpcConfig = backend == Backend.Rpc
             ? new RpcConfig(
                 Url: RpcUrl,
                 Username: RpcUser,
                 Password: RpcPassword,
-                WalletName: $"csharp_{name}")
+                WalletName: rpcWalletName)
             : null;
 
         var backendConfig = backend == Backend.Electrum
@@ -79,6 +81,9 @@ public class SwapTest
                 MaxRetries: null)
             : null;
 
+        if (backend == Backend.Rpc)
+            CleanupBitcoindWallet(rpcWalletName);
+
         // Positional args mirror the Rust `Taker::init` signature order:
         // (data_dir, wallet_file_name, rpc_config, control_port, tor_auth_password,
         //  zmq_addr, password, nostr_relays, backend_config).
@@ -90,7 +95,7 @@ public class SwapTest
             "coinswap",
             ZmqAddr,
             "",
-            null,
+            NostrRelays,
             backendConfig);
 
         taker.SyncOfferbookAndWait();
@@ -119,10 +124,21 @@ public class SwapTest
 
         var report = taker.StartCoinswap(swapId);
         Assert.NotNull(report);
-        Assert.Equal(2u, report.MakersCount);
+        Assert.True(report.MakersCount.HasValue, $"{name}: swap report should include maker count");
+        Assert.Equal(2u, report.MakersCount.Value);
         Assert.Contains("SUCCESS", report.Status.ToUpperInvariant());
 
         _out.WriteLine($"✓ {name} passed (swap_id {report.SwapId})");
+    }
+
+    /// <summary>Removes a stale Docker-hosted taker wallet from prior test runs.</summary>
+    private void CleanupBitcoindWallet(string walletName)
+    {
+        RunDocker(
+            "exec", BitcoindContainer, "bitcoin-cli", "-regtest", "-rpcport=18442",
+            $"-rpcuser={RpcUser}", $"-rpcpassword={RpcPassword}",
+            "unloadwallet", walletName);
+        RunDocker("exec", BitcoindContainer, "rm", "-rf", $"/home/bitcoin/.bitcoin/wallets/{walletName}");
     }
 
     /// <summary>Sync until spendable reaches <paramref name="target"/>, tolerating Electrum indexing lag.</summary>
